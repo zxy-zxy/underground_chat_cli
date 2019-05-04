@@ -1,0 +1,4 @@
+aiofile==1.5.1
+asynctest==0.12.4
+pytest==4.4.1
+python-dotenv==0.10.1
