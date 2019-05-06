@@ -1,8 +1,9 @@
 import asyncio
 
 import asynctest
+import logging
 
-from chat.reader import ChatReader
+from chat.client import ChatClient
 
 
 def stream_reader_mock(host, port):
@@ -26,7 +27,13 @@ class TestChatClientReader(asynctest.TestCase):
     async def test_one(self, open_connection_mock, writer_mock):
         host = 'host'
         port = 5000
-        chat_reader_client = ChatReader(host, port, None)
+        chat_reader_client = ChatClient(
+            host,
+            port,
+            None,
+            None,
+            logging.getLogger(__file__)
+        )
         connected = await chat_reader_client.connect()
         self.assertTrue(connected)
         message = await chat_reader_client.read_message_from_stream()
