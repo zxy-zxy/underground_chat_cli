@@ -5,23 +5,25 @@ As of now client supports several operations:
 * send - send new message to the chat.
 * register - register a new account.
 
-Register a new account.
 ## Requirements
 Python >= 3.7 is required.
 
-## Usage
 Install dependencies with 
 ```bash
 pip install -r requirements.txt
 ```
 For better interaction is recommended to use [virtualenv](https://github.com/pypa/virtualenv).
+
+## Usage
+
 #### Tests
 Run tests with 
 ```python
 python -m unittest 
 ```
-#### Usage
-Configure .env file with needed parameters. Example.env is provided within the repository.
+#### Example
+Configure .env file with needed parameters or provide them as arguments.
+Example.env is provided within the repository.
 ```python
 python run.py --help
 python run.py listen
