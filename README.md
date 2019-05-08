@@ -18,13 +18,13 @@ For better interaction is recommended to use [virtualenv](https://github.com/pyp
 
 #### Tests
 Run tests with 
-```python
+```bash
 python -m unittest 
 ```
 #### Example
 Configure .env file with needed parameters or provide them as arguments.
 Example.env is provided within the repository.
-```python
+```bash
 python run.py --help
 python run.py listen
 ```
