@@ -3,80 +3,58 @@ import asyncio
 import os
 import sys
 import logging
-from typing import Optional
 
 from dotenv import load_dotenv
 
-from logger_config import get_logger
+from utils.logger_config import get_logger
 from chat.client import ChatClient, ChatClientError
-from scenario import (
-    send_message_scenario,
-    register_scenario,
-    ScenarioError,
-)
+from utils.scenario import send_message_scenario, register_scenario, ScenarioError
 
 
 def create_parser():
     parser = argparse.ArgumentParser(
-        description='Minecraft chat which is built with asyncio.')
+        description='Minecraft chat which is built with asyncio.'
+    )
 
     parser.add_argument(
-        '--host',
-        type=str,
-        help='Target host.',
-        default=os.getenv('HOST')
+        '--host', type=str, help='Target host.', default=os.getenv('HOST')
     )
     parser.add_argument(
-        '--port',
-        type=int,
-        help='Target port.',
-        default=os.getenv('PORT')
+        '--port', type=int, help='Target port.', default=os.getenv('PORT')
     )
     parser.add_argument(
         '--history',
         help='Path to file to store chat history.',
-        default=os.getenv('HISTORY')
+        default=os.getenv('HISTORY'),
     )
 
     parser.add_argument(
-        '--timeout',
-        help='Chat response timeout.',
-        default=os.getenv('TIMEOUT')
+        '--timeout', help='Chat response timeout.', default=os.getenv('TIMEOUT')
     )
 
     subparsers = parser.add_subparsers(dest='command')
 
-    listen_parser = subparsers.add_parser(
-        'listen',
-        help='Listen chat.'
-    )
+    listen_parser = subparsers.add_parser('listen', help='Listen chat.')
 
     message_sender_parser = subparsers.add_parser(
-        'send',
-        help='Send message with a valid auth token.'
+        'send', help='Send message with a valid auth token.'
     )
     message_sender_parser.add_argument(
         '--message',
         type=str,
         help='Message to send to server.',
-        default=os.getenv('MESSAGE')
+        default=os.getenv('MESSAGE'),
     )
     message_sender_parser.add_argument(
-        '--token',
-        type=str,
-        help='Authentication token.',
-        default=os.getenv('TOKEN')
+        '--token', type=str, help='Authentication token.', default=os.getenv('TOKEN')
     )
 
-    register_parser = subparsers.add_parser(
-        'register',
-        help='Register a new account.'
-    )
+    register_parser = subparsers.add_parser('register', help='Register a new account.')
     register_parser.add_argument(
         '--username',
         type=str,
         help='Your new account name.',
-        default=os.getenv('USERNAME')
+        default=os.getenv('USERNAME'),
     )
     return parser
 
@@ -110,9 +88,7 @@ async def process_scenario(chat_client: ChatClient, coroutine, **kwargs):
             except ChatClientError:
                 connected = False
             except ScenarioError as e:
-                sys.stdout.write(
-                    f'{str(e)}'
-                )
+                sys.stdout.write(f'{str(e)}')
                 break
             except KeyboardInterrupt:
                 sys.stdout.write('gently closing')
@@ -129,9 +105,11 @@ def main():
 
     logger = get_logger('general_logger', logging.DEBUG)
 
-    chat_client = ChatClient(
-        host, port, timeout, history_file_path, logger
-    )
+    if not os.path.isfile(history_file_path):
+        sys.stdout.write(f'File is not exists or cannot be open: {history_file_path}')
+        sys.exit(1)
+
+    chat_client = ChatClient(host, port, timeout, history_file_path, logger)
 
     if args.command == 'listen':
         asyncio.run(listen_chat(chat_client))
@@ -140,7 +118,14 @@ def main():
         asyncio.run(process_scenario(chat_client, coroutine, username=args.username))
     elif args.command == 'send':
         coroutine = send_message_scenario
-        asyncio.run(process_scenario(chat_client, coroutine, token=args.token, message=args.message))
+        asyncio.run(
+            process_scenario(
+                chat_client, coroutine, token=args.token, message=args.message
+            )
+        )
+    else:
+        sys.stdout.write('Wrong command.')
+        sys.exit(1)
 
 
 if __name__ == '__main__':
