@@ -84,7 +84,7 @@ async def listen_chat(chat_client: ChatClient):
         try:
             await chat_client.read_message_from_stream()
         except ChatClientError:
-            initialize_connection(chat_client)
+            await initialize_connection(chat_client)
         except KeyboardInterrupt:
             sys.stdout.write('gently closing')
             break
