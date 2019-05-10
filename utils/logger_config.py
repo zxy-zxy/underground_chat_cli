@@ -2,8 +2,6 @@ import os
 import logging
 from logging.handlers import TimedRotatingFileHandler
 
-from utils.general import get_or_create_directory
-
 
 def get_formatter():
     return logging.Formatter('%(asctime)s — %(name)s — %(levelname)s — %(message)s')
@@ -12,7 +10,7 @@ def get_formatter():
 def get_log_file_name():
     root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     logs_directory = os.path.join(root_directory, 'logs')
-    get_or_create_directory(logs_directory)
+    os.makedirs(logs_directory, exist_ok=True)
     log_file_name = 'underground_chat_client.log'
     return os.path.join(logs_directory, log_file_name)
 

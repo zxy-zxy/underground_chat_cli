@@ -1,10 +1,9 @@
-from abc import ABCMeta
 import datetime
 import asyncio
 import socket
 from logging import Logger
 
-from aiofile import AIOFile, Writer
+from aiofile import AIOFile
 
 
 class ChatClientError(Exception):
@@ -13,18 +12,13 @@ class ChatClientError(Exception):
 
 class ChatClient:
     def __init__(
-            self,
-            host: str,
-            port: int,
-            timeout: int,
-            history_file_path: str,
-            logger: Logger,
+        self, host: str, port: int, timeout: int, history_file_path: str, logger: Logger
     ):
         self._host = host
         self._port = port
-        self._connection_attempts = 0
         self._timeout = timeout
         self._history_file_path = history_file_path
+        self._history_file_descriptor = None
         self._stream_reader = None
         self._stream_writer = None
         self._logger = logger
@@ -33,14 +27,8 @@ class ChatClient:
         try:
 
             self._stream_reader, self._stream_writer = await asyncio.wait_for(
-                asyncio.open_connection(
-                    host=self._host,
-                    port=self._port
-                ),
-                self._timeout
+                asyncio.open_connection(host=self._host, port=self._port), self._timeout
             )
-
-            self._connection_attempts = 0
 
             message = f'Connection established to {self._host}:{self._port}.\n'
             await self._save_message_to_history(message)
@@ -48,21 +36,16 @@ class ChatClient:
             return True
 
         except (
-                asyncio.TimeoutError,
-                ConnectionRefusedError,
-                ConnectionError,
-                socket.gaierror,
+            asyncio.TimeoutError,
+            ConnectionRefusedError,
+            ConnectionError,
+            socket.gaierror,
         ) as e:
+            message = (
+                'Cannot establish connection to {} {}'
+                '.An error occurred: {}\n'.format(self._host, self._port, str(e))
+            )
 
-            self._connection_attempts += 1
-            if self._connection_attempts > 2:
-                message = f'No connection to {self._host}:{self._port}. Retry after 2 seconds.\n'
-                seconds_to_wait = 2
-            else:
-                message = f'No connection to {self._host}:{self._port}.\n'
-                seconds_to_wait = 0
-
-            await asyncio.sleep(seconds_to_wait)
             await self._save_message_to_history(message)
 
             return False
@@ -72,10 +55,8 @@ class ChatClient:
             raise ChatClientError
 
         try:
-            data = await asyncio.wait_for(
-                self._stream_reader.readline(),
-                self._timeout
-            )
+
+            data = await self._stream_reader.readline()
 
             message = data.decode('utf-8')
 
@@ -90,13 +71,13 @@ class ChatClient:
 
             return message
 
-        except (asyncio.TimeoutError, ConnectionRefusedError, ConnectionError) as e:
-            raise ChatClientError
+        except (ConnectionRefusedError, ConnectionError, ValueError) as e:
+            raise ChatClientError(str(e))
 
     async def write_message_to_stream(self, message: str):
 
         sanitazed_message = message.replace('\n', '').strip()
-        message_to_send = ''.join([sanitazed_message, '\n', '\n'])
+        message_to_send = f'{sanitazed_message}\n\n'
         encoded_message = message_to_send.encode('utf-8')
 
         try:
@@ -110,14 +91,16 @@ class ChatClient:
             raise ChatClientError
 
     async def _save_message_to_history(self, message: str):
+
         if self._history_file_path is None:
             return
 
-        timestamp = ''.join(
-            ['[', datetime.datetime.now().strftime('%Y.%m.%d %H:%M'), ']']
-        )
-        message = ' '.join([timestamp, message])
-        async with AIOFile(self._history_file_path, 'a') as afp:
-            writer = Writer(afp)
-            await writer(message)
-            await afp.fsync()
+        if self._history_file_descriptor is None:
+            self._history_file_descriptor = await AIOFile(self._history_file_path, 'a')
+            await self._history_file_descriptor.open()
+
+        timestamp = datetime.datetime.now().strftime('%Y.%m.%d %H:%M:%S')
+        timestamp = f'[{timestamp}]'
+        message = f'{timestamp} {message}'
+
+        await self._history_file_descriptor.write(message)

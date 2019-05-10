@@ -59,40 +59,53 @@ def create_parser():
     return parser
 
 
+async def initialize_connection(chat_client: ChatClient):
+    attempts = 1
+    attempts_limit_without_suspend = 2
+    seconds_to_suspend = 2
+    connected = await chat_client.connect()
+
+    while not connected:
+        if attempts > attempts_limit_without_suspend:
+            sys.stdout.write(
+                f'Cannot open the connection. Retry after {seconds_to_suspend} seconds.\n'
+            )
+            await asyncio.sleep(seconds_to_suspend)
+        else:
+            sys.stdout.write('Cannot open the connection. Retry.\n')
+
+        connected = await chat_client.connect()
+        attempts += 1
+
+
 async def listen_chat(chat_client: ChatClient):
-    connected = await chat_client.connect()
+    await initialize_connection(chat_client)
     while True:
-        if not connected:
-            connected = await chat_client.connect()
-        else:
-            try:
-                await chat_client.read_message_from_stream()
-            except ChatClientError:
-                connected = False
-            except KeyboardInterrupt:
-                sys.stdout.write('gently closing')
-                break
+        try:
+            await chat_client.read_message_from_stream()
+        except ChatClientError:
+            initialize_connection(chat_client)
+        except KeyboardInterrupt:
+            sys.stdout.write('gently closing')
+            break
 
 
-async def process_scenario(chat_client: ChatClient, coroutine, **kwargs):
-    connected = await chat_client.connect()
+async def process_scenario(chat_client: ChatClient, async_function: function, **kwargs):
+    await initialize_connection(chat_client)
     while True:
-        if not connected:
-            connected = await chat_client.connect()
-        else:
-            try:
-                response = await coroutine(chat_client, **kwargs)
-                if response:
-                    sys.stdout.write(response)
-                    break
-            except ChatClientError:
-                connected = False
-            except ScenarioError as e:
-                sys.stdout.write(f'{str(e)}')
+        try:
+            response = await async_function(chat_client, **kwargs)
+            if response:
+                sys.stdout.write(response)
                 break
-            except KeyboardInterrupt:
-                sys.stdout.write('gently closing')
-                break
+        except ChatClientError:
+            await initialize_connection(chat_client)
+        except ScenarioError as e:
+            sys.stdout.write(f'{str(e)}')
+            break
+        except KeyboardInterrupt:
+            sys.stdout.write('gently closing')
+            break
 
 
 def main():
@@ -111,21 +124,27 @@ def main():
 
     chat_client = ChatClient(host, port, timeout, history_file_path, logger)
 
-    if args.command == 'listen':
-        asyncio.run(listen_chat(chat_client))
-    elif args.command == 'register':
-        coroutine = register_scenario
-        asyncio.run(process_scenario(chat_client, coroutine, username=args.username))
-    elif args.command == 'send':
-        coroutine = send_message_scenario
-        asyncio.run(
-            process_scenario(
-                chat_client, coroutine, token=args.token, message=args.message
+    try:
+
+        if args.command == 'listen':
+            asyncio.run(listen_chat(chat_client))
+        elif args.command == 'register':
+            async_function = register_scenario
+            asyncio.run(
+                process_scenario(chat_client, async_function, username=args.username)
             )
-        )
-    else:
-        sys.stdout.write('Wrong command.')
-        sys.exit(1)
+        elif args.command == 'send':
+            async_function = send_message_scenario
+            print(type(async_function))
+            asyncio.run(
+                process_scenario(
+                    chat_client, async_function, token=args.token, message=args.message)
+            )
+        else:
+            sys.stdout.write('Wrong command.')
+            sys.exit(1)
+    except KeyboardInterrupt as e:
+        sys.stdout.write('gently closing\n')
 
 
 if __name__ == '__main__':
