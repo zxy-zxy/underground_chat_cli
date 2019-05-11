@@ -3,6 +3,7 @@ import asyncio
 import os
 import sys
 import logging
+from typing import Callable
 
 from dotenv import load_dotenv
 
@@ -59,53 +60,42 @@ def create_parser():
     return parser
 
 
-async def initialize_connection(chat_client: ChatClient):
-    attempts = 1
-    attempts_limit_without_suspend = 2
-    seconds_to_suspend = 2
-    connected = await chat_client.connect()
-
-    while not connected:
-        if attempts > attempts_limit_without_suspend:
-            sys.stdout.write(
-                f'Cannot open the connection. Retry after {seconds_to_suspend} seconds.\n'
-            )
-            await asyncio.sleep(seconds_to_suspend)
-        else:
-            sys.stdout.write('Cannot open the connection. Retry.\n')
-
-        connected = await chat_client.connect()
-        attempts += 1
-
-
-async def listen_chat(chat_client: ChatClient):
-    await initialize_connection(chat_client)
+async def process_scenario(chat_client: ChatClient, async_function: Callable, **kwargs):
     while True:
-        try:
-            await chat_client.read_message_from_stream()
-        except ChatClientError:
-            await initialize_connection(chat_client)
-        except KeyboardInterrupt:
-            sys.stdout.write('gently closing')
-            break
-
-
-async def process_scenario(chat_client: ChatClient, async_function: function, **kwargs):
-    await initialize_connection(chat_client)
-    while True:
-        try:
-            response = await async_function(chat_client, **kwargs)
-            if response:
-                sys.stdout.write(response)
+        async with chat_client:
+            try:
+                response = await async_function(chat_client, **kwargs)
+                if response:
+                    sys.stdout.write(response)
+                    break
+            except (ConnectionRefusedError, ConnectionResetError) as e:
+                sys.stdout.write(f'Connection is lost: {str(e)}. Reconnecting.')
+            except (ScenarioError, ChatClientError) as e:
+                sys.stdout.write(f'An error has occurred: {str(e)}')
                 break
-        except ChatClientError:
-            await initialize_connection(chat_client)
-        except ScenarioError as e:
-            sys.stdout.write(f'{str(e)}')
-            break
-        except KeyboardInterrupt:
-            sys.stdout.write('gently closing')
-            break
+            except KeyboardInterrupt:
+                sys.stdout.write('gently closing')
+                break
+
+
+async def run_listen_chat(chat_client: ChatClient):
+    while True:
+        async with chat_client:
+            try:
+                await listen_chat(chat_client)
+            except (ConnectionRefusedError, ConnectionResetError) as e:
+                sys.stdout.write(f'Connection is lost: {str(e)}. Reconnecting.')
+            except ChatClientError as e:
+                sys.stdout.write(f'An error has occurred: {str(e)}')
+                break
+            except KeyboardInterrupt:
+                sys.stdout.write('gently closing')
+                break
+
+
+async def listen_chat(chat_client):
+    while True:
+        await chat_client.read_message_from_stream()
 
 
 def main():
@@ -127,7 +117,7 @@ def main():
     try:
 
         if args.command == 'listen':
-            asyncio.run(listen_chat(chat_client))
+            asyncio.run(run_listen_chat(chat_client))
         elif args.command == 'register':
             async_function = register_scenario
             asyncio.run(
@@ -135,7 +125,6 @@ def main():
             )
         elif args.command == 'send':
             async_function = send_message_scenario
-            print(type(async_function))
             asyncio.run(
                 process_scenario(
                     chat_client, async_function, token=args.token, message=args.message)

@@ -23,7 +23,7 @@ def history_tracker_mixin_write_method_mock(history_file_path=None):
     'chat.client.ChatClient._save_message_to_history',
     side_effect=history_tracker_mixin_write_method_mock,
 )
-class TestChatClientReader(asynctest.TestCase):
+class TestChatClient(asynctest.TestCase):
     async def setUp(self):
         self.host = 'host'
         self.port = 5000
@@ -31,25 +31,19 @@ class TestChatClientReader(asynctest.TestCase):
             self.host, self.port, None, None, logging.getLogger(__file__)
         )
 
-    async def test_chat_client_connected(
-        self, open_connection_mock, save_message_to_history_mock
-    ):
-        connected = await self.chat_reader_client.connect()
-        self.assertTrue(connected)
-
     async def test_chat_client_read_correct(
-        self, open_connection_mock, save_message_to_history_mock
+            self, open_connection_mock, save_message_to_history_mock
     ):
-        await self.chat_reader_client.connect()
-        message = await self.chat_reader_client.read_message_from_stream()
-        self.assertEqual(message, f'message from {self.host} {self.port}')
+        async with self.chat_reader_client:
+            message = await self.chat_reader_client.read_message_from_stream()
+            self.assertEqual(message, f'message from {self.host} {self.port}')
 
     async def test_chat_client_write_correct(
-        self, open_connection_mock, save_message_to_history_mock
+            self, open_connection_mock, save_message_to_history_mock
     ):
-        await self.chat_reader_client.connect()
-        res = await self.chat_reader_client.write_message_to_stream('message')
-        self.assertTrue(res)
+        async with self.chat_reader_client:
+            res = await self.chat_reader_client.write_message_to_stream('message')
+            self.assertTrue(res)
 
 
 if __name__ == '__main__':

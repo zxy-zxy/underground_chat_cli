@@ -1,3 +1,4 @@
+import sys
 import os
 import logging
 from logging.handlers import TimedRotatingFileHandler
@@ -21,9 +22,16 @@ def get_file_handler():
     return file_handler
 
 
+def get_console_handler():
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(get_formatter())
+    return console_handler
+
+
 def get_logger(logger_name, logging_lvl):
     logger = logging.getLogger(logger_name)
     logger.setLevel(logging_lvl)
+    logger.addHandler(get_console_handler())
     logger.addHandler(get_file_handler())
     logger.propagate = False
     return logger
